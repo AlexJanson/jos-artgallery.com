@@ -4,12 +4,15 @@ use App\Mail\ContactConfirm;
 use App\Mail\ContactOrder;
 use App\Models\Painting;
 use Illuminate\Foundation\Application;
+use Illuminate\Http\Client\Request;
 use Illuminate\Mail\Markdown;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
+use Intervention\Image\Facades\Image;
 
 /*
 |--------------------------------------------------------------------------
@@ -86,7 +89,7 @@ Route::middleware(['auth:sanctum', 'verified'])->post('/paintings', function () 
         'height' => 'required|numeric'
     ]);
 
-    $validated['photo'] = request()->file('photo')->store('photos');
+    $validated['photo'] = storeWebpImage($validated['photo']);
     $validated['slug'] = Str::slug($validated['name'], '-');
     $validated['order'] = 9999;
 
@@ -94,6 +97,15 @@ Route::middleware(['auth:sanctum', 'verified'])->post('/paintings', function () 
 
     return redirect('/dashboard');
 })->name('painting.create');
+
+function storeWebpImage($photo)
+{
+    $imageName = time() . '.webp';
+    Image::make($photo)->encode('webp', 90)->resize(1280, null, function ($constraint) {
+        $constraint->aspectRatio();
+    })->save(storage_path('app/public/photos/' . $imageName));
+    return 'photos/' . $imageName;
+}
 
 Route::middleware(['auth:sanctum', 'verified'])->delete('/paintings', function () {
     $painting = Painting::find(request()->id);
