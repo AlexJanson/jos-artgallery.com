@@ -8,7 +8,7 @@
 
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <edit-painting :painting="painting" />
+                <edit-painting :painting="painting" :groups="groups" />
             </div>
         </div>
     </app-layout>
@@ -19,8 +19,7 @@ import AppLayout from "@/Layouts/AppLayout";
 import EditPainting from "./Partials/EditPainting";
 
 defineProps({
-    painting: {
-        type: Object,
-    },
+    painting: Object,
+    groups: Array
 });
 </script>

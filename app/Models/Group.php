@@ -5,14 +5,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Painting extends Model
+class Group extends Model
 {
     use HasFactory;
 
     protected $guarded = [];
 
-    public function group()
+    public function paintings()
     {
-        return $this->belongsTo(Group::class);
+        return $this->hasMany(Painting::class);
     }
 }

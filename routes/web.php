@@ -2,16 +2,13 @@
 
 use App\Mail\ContactConfirm;
 use App\Mail\ContactOrder;
+use App\Models\Group;
 use App\Models\Painting;
-use Illuminate\Foundation\Application;
-use Illuminate\Http\Client\Request;
-use Illuminate\Mail\Markdown;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Inertia\Inertia;
 use Intervention\Image\Facades\Image;
 
 /*
@@ -25,15 +22,26 @@ use Intervention\Image\Facades\Image;
 |
 */
 
+Route::middleware(['auth:sanctum', 'verified'])->put('/rotate/{painting:slug}', function (Painting $painting) {
+    $file = File::get(storage_path('app/public/' . $painting->photo));
+    Image::make($file)->rotate(-90)->save(storage_path('app/public/' . $painting->photo));
+
+    return redirect(route('painting.edit', $painting->slug));
+})->name('rotate');
+
 Route::get('/', function () {
-    return inertia('Site/Home');
+    $paintings = Painting::inRandomOrder()->limit(4)->get();
+    return inertia('Site/Home', [
+        'paintings' => $paintings
+    ]);
 })->name('home');
 
 Route::get('/gallery', function () {
     $paintings = Painting::orderBy('order', 'ASC')->get();
 
     return inertia('Site/Gallery', [
-        'paintings' => $paintings
+        'paintings' => $paintings,
+        'groups' => Group::all()
     ]);
 })->name('gallery');
 
@@ -75,7 +83,8 @@ Route::post('/contact', function () {
 
 Route::middleware(['auth:sanctum', 'verified'])->get('/dashboard', function () {
     return inertia('Dashboard/Show', [
-        'paintings' => Painting::orderBy('order', 'ASC')->get()
+        'paintings' => Painting::orderBy('order', 'ASC')->get(),
+        'groups' => Group::all()
     ]);
 })->name('dashboard');
 
@@ -86,7 +95,8 @@ Route::middleware(['auth:sanctum', 'verified'])->post('/paintings', function () 
         'make' => 'required',
         'price' => 'required|numeric',
         'width' => 'required|numeric',
-        'height' => 'required|numeric'
+        'height' => 'required|numeric',
+        'group_id' => 'required'
     ]);
 
     $validated['photo'] = storeWebpImage($validated['photo']);
@@ -103,7 +113,7 @@ function storeWebpImage($photo)
     $imageName = time() . '.webp';
     Image::make($photo)->encode('webp', 90)->resize(1280, null, function ($constraint) {
         $constraint->aspectRatio();
-    })->save(storage_path('app/public/photos/' . $imageName));
+    })->orientate()->save(storage_path('app/public/photos/' . $imageName));
     return 'photos/' . $imageName;
 }
 
@@ -124,7 +134,8 @@ Route::middleware(['auth:sanctum', 'verified'])->put('/paintings', function () {
 
 Route::middleware(['auth:sanctum', 'verified'])->get('/dashboard/edit/{painting:slug}', function (Painting $painting) {
     return inertia('Painting/Edit/Show', [
-        'painting' => $painting
+        'painting' => $painting->loadMissing('group'),
+        'groups' => Group::all()
     ]);
 })->name('painting.edit');
 
@@ -135,7 +146,8 @@ Route::middleware(['auth:sanctum', 'verified'])->post('/painting', function () {
         'make' => 'required',
         'price' => 'required|numeric',
         'width' => 'required|numeric',
-        'height' => 'required|numeric'
+        'height' => 'required|numeric',
+        'group_id' => 'required'
     ]);
 
     $painting = Painting::find(request()->id);
@@ -144,9 +156,11 @@ Route::middleware(['auth:sanctum', 'verified'])->post('/painting', function () {
     $painting->price = $validated["price"];
     $painting->width = $validated["width"];
     $painting->height = $validated["height"];
+    $painting->group_id = $validated["group_id"];
 
     if (request()->photo) {
-        $painting->photo = request()->file('photo')->store('photos');
+        $validated['photo'] = storeWebpImage($validated['photo']);
+        $painting->photo = $validated['photo'];
         $painting->slug = Str::slug($validated['name'], '-');
     }
 
@@ -171,3 +185,33 @@ Route::post('/painting/view', function () {
 
     return back();
 })->name('painting.view');
+
+Route::middleware(['auth:sanctum', 'verified'])->get('/dashboard/groups', function () {
+    return inertia('Dashboard/Groups/Show', [
+        'paintings' => Painting::orderBy('order', 'ASC')->with('group')->get(),
+        'groups' => Group::all()
+    ]);
+})->name('dashboard.groups');
+
+Route::middleware(['auth:sanctum', 'verified'])->post('/dashboard/groups', function () {
+    $validated = request()->validate([
+        'name' => ['required', Rule::unique('groups', 'name')]
+    ]);
+
+    Group::create($validated);
+
+    return inertia('Dashboard/Groups/Show', [
+        'paintings' => Painting::orderBy('order', 'ASC')->with('group')->get(),
+        'groups' => Group::all()
+    ]);
+})->name('dashboard.groups.create');
+
+Route::middleware(['auth:sanctum', 'verified'])->delete('/dashboard/groups', function () {
+    $group = Group::find(request()->id);
+    $group->delete();
+
+    return inertia('Dashboard/Groups/Show', [
+        'paintings' => Painting::orderBy('order', 'ASC')->with('group')->get(),
+        'groups' => Group::all()
+    ]);
+})->name('dashboard.groups.delete');
